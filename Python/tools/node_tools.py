@@ -726,4 +726,51 @@ def register_blueprint_node_tools(mcp: FastMCP):
         except Exception as e:
             return {"success": False, "message": f"Error overriding function: {e}"}
 
+    @mcp.tool()
+    def add_blueprint_generic_create_object(
+        ctx: Context,
+        blueprint_name: str,
+        class_name: str,
+        node_position = None,
+        graph_name: str = None
+    ) -> Dict[str, Any]:
+        """
+        Add a Construct Object (GenericCreateObject) node to a Blueprint graph.
+        Creates an instance of the specified class at runtime. The node has exec pins,
+        a Class pin (auto-set), an Outer pin (object to own the created instance),
+        and a ReturnValue pin (the created object).
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            class_name: Name of the class to construct (e.g. BP_LabAction_Speak, LabAgentAction)
+            node_position: Optional [X, Y] position in the graph
+            graph_name: Optional graph name to target. Defaults to EventGraph.
+
+        Returns:
+            Response with node_id and pins list
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "class_name": class_name,
+                "node_position": node_position or [0, 0]
+            }
+            if graph_name:
+                params["graph_name"] = graph_name
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("add_blueprint_generic_create_object", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error adding create object node: {e}"}
+
     logger.info("Blueprint node tools registered successfully")

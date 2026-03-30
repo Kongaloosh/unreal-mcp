@@ -12,6 +12,7 @@
 #include "K2Node_Self.h"
 #include "K2Node_IfThenElse.h"
 #include "K2Node_CustomEvent.h"
+#include "K2Node_GenericCreateObject.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "GameFramework/InputSettings.h"
@@ -87,6 +88,10 @@ TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleCommand(const FSt
     else if (CommandType == TEXT("override_blueprint_function"))
     {
         return HandleOverrideBlueprintFunction(Params);
+    }
+    else if (CommandType == TEXT("add_blueprint_generic_create_object"))
+    {
+        return HandleAddBlueprintGenericCreateObject(Params);
     }
 
     return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Unknown blueprint node command: %s"), *CommandType));
@@ -1417,5 +1422,99 @@ TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleOverrideBlueprint
         NodeArray.Add(MakeShared<FJsonValueObject>(NodeObj));
     }
     ResultObj->SetArrayField(TEXT("nodes"), NodeArray);
+    return ResultObj;
+}
+
+TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleAddBlueprintGenericCreateObject(const TSharedPtr<FJsonObject>& Params)
+{
+    FString BlueprintName;
+    if (!Params->TryGetStringField(TEXT("blueprint_name"), BlueprintName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'blueprint_name' parameter"));
+    }
+
+    FString ClassName;
+    if (!Params->TryGetStringField(TEXT("class_name"), ClassName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'class_name' parameter"));
+    }
+
+    UBlueprint* Blueprint = FUnrealMCPCommonUtils::FindBlueprint(BlueprintName);
+    if (!Blueprint)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Blueprint not found: %s"), *BlueprintName));
+    }
+
+    UEdGraph* Graph = ResolveGraph(Blueprint, Params);
+    if (!Graph)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Failed to find graph"));
+    }
+
+    // Find the class to create
+    UClass* ClassToCreate = nullptr;
+    TArray<FString> NamesToTry;
+    NamesToTry.Add(ClassName);
+    if (!ClassName.StartsWith(TEXT("U")) && !ClassName.StartsWith(TEXT("A")))
+    {
+        NamesToTry.Add(TEXT("U") + ClassName);
+        NamesToTry.Add(TEXT("A") + ClassName);
+    }
+    for (const FString& Name : NamesToTry)
+    {
+        ClassToCreate = FindObject<UClass>(ANY_PACKAGE, *Name);
+        if (ClassToCreate) break;
+    }
+    // Also try as Blueprint generated class
+    if (!ClassToCreate)
+    {
+        UBlueprint* ClassBP = FUnrealMCPCommonUtils::FindBlueprint(ClassName);
+        if (ClassBP && ClassBP->GeneratedClass)
+        {
+            ClassToCreate = ClassBP->GeneratedClass;
+        }
+    }
+    if (!ClassToCreate)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Class not found: %s"), *ClassName));
+    }
+
+    FVector2D Position = FUnrealMCPCommonUtils::GetVector2DFromJson(Params, TEXT("node_position"));
+
+    UK2Node_GenericCreateObject* CreateNode = NewObject<UK2Node_GenericCreateObject>(Graph);
+    CreateNode->NodePosX = Position.X;
+    CreateNode->NodePosY = Position.Y;
+    Graph->AddNode(CreateNode, true);
+    CreateNode->CreateNewGuid();
+    CreateNode->PostPlacedNewNode();
+    CreateNode->AllocateDefaultPins();
+
+    // Set the class pin to the target class
+    UEdGraphPin* ClassPin = CreateNode->GetClassPin();
+    if (ClassPin)
+    {
+        ClassPin->DefaultObject = ClassToCreate;
+    }
+    // Reconstruct node to update pins based on the class
+    CreateNode->ReconstructNode();
+
+    FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+
+    TSharedPtr<FJsonObject> ResultObj = MakeShared<FJsonObject>();
+    ResultObj->SetStringField(TEXT("node_id"), CreateNode->NodeGuid.ToString());
+    ResultObj->SetStringField(TEXT("class_name"), ClassToCreate->GetName());
+
+    // List pins for the caller
+    TArray<TSharedPtr<FJsonValue>> PinArray;
+    for (UEdGraphPin* Pin : CreateNode->Pins)
+    {
+        TSharedPtr<FJsonObject> PinObj = MakeShared<FJsonObject>();
+        PinObj->SetStringField(TEXT("name"), Pin->PinName.ToString());
+        PinObj->SetStringField(TEXT("direction"), Pin->Direction == EGPD_Input ? TEXT("Input") : TEXT("Output"));
+        PinObj->SetStringField(TEXT("type"), Pin->PinType.PinCategory.ToString());
+        PinArray.Add(MakeShared<FJsonValueObject>(PinObj));
+    }
+    ResultObj->SetArrayField(TEXT("pins"), PinArray);
+
     return ResultObj;
 }

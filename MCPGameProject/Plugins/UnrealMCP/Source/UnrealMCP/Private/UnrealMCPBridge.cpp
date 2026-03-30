@@ -266,7 +266,8 @@ FString UUnrealMCPBridge::ExecuteCommand(const FString& CommandType, const TShar
                      CommandType == TEXT("add_blueprint_custom_event") ||
                      CommandType == TEXT("remove_blueprint_node") ||
                      CommandType == TEXT("disconnect_blueprint_nodes") ||
-                     CommandType == TEXT("override_blueprint_function"))
+                     CommandType == TEXT("override_blueprint_function") ||
+                     CommandType == TEXT("add_blueprint_generic_create_object"))
             {
                 ResultJson = BlueprintNodeCommands->HandleCommand(CommandType, Params);
             }

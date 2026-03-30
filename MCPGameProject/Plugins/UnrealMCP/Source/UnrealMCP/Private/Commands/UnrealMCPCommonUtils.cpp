@@ -153,8 +153,36 @@ UBlueprint* FUnrealMCPCommonUtils::FindBlueprint(const FString& BlueprintName)
 
 UBlueprint* FUnrealMCPCommonUtils::FindBlueprintByName(const FString& BlueprintName)
 {
+    // If it looks like a full path, try loading directly
+    if (BlueprintName.StartsWith(TEXT("/Game/")))
+    {
+        UBlueprint* BP = LoadObject<UBlueprint>(nullptr, *BlueprintName);
+        if (BP) return BP;
+        // Try with explicit asset name (path.assetname format)
+        FString WithAssetName = BlueprintName + TEXT(".") + FPaths::GetBaseFilename(BlueprintName);
+        BP = LoadObject<UBlueprint>(nullptr, *WithAssetName);
+        if (BP) return BP;
+    }
+
+    // Try the default path
     FString AssetPath = TEXT("/Game/Blueprints/") + BlueprintName;
-    return LoadObject<UBlueprint>(nullptr, *AssetPath);
+    UBlueprint* BP = LoadObject<UBlueprint>(nullptr, *AssetPath);
+    if (BP) return BP;
+
+    // Search the asset registry as fallback
+    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+    IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+    TArray<FAssetData> AssetDataList;
+    AssetRegistry.GetAssetsByClass(UBlueprint::StaticClass()->GetClassPathName(), AssetDataList);
+    for (const FAssetData& AssetData : AssetDataList)
+    {
+        if (AssetData.AssetName.ToString() == BlueprintName)
+        {
+            return Cast<UBlueprint>(AssetData.GetAsset());
+        }
+    }
+
+    return nullptr;
 }
 
 UEdGraph* FUnrealMCPCommonUtils::FindOrCreateEventGraph(UBlueprint* Blueprint)
