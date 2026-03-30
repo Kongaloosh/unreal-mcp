@@ -207,11 +207,24 @@ UK2Node_Event* FUnrealMCPCommonUtils::CreateEventNode(UEdGraph* Graph, const FSt
 
     // No existing node found, create a new one
     UK2Node_Event* EventNode = nullptr;
-    
-    // Find the function to create the event
+
+    // Find the function to create the event — check the generated class first,
+    // then walk up to native parent classes (needed for BlueprintImplementableEvent
+    // functions which only exist on the declaring C++ class, not the BP generated class)
     UClass* BlueprintClass = Blueprint->GeneratedClass;
     UFunction* EventFunction = BlueprintClass->FindFunctionByName(FName(*EventName));
-    
+
+    if (!EventFunction)
+    {
+        // Walk up the parent class chain to find BlueprintImplementableEvent functions
+        UClass* ParentClass = Blueprint->ParentClass;
+        while (ParentClass && !EventFunction)
+        {
+            EventFunction = ParentClass->FindFunctionByName(FName(*EventName), EIncludeSuperFlag::ExcludeSuper);
+            ParentClass = ParentClass->GetSuperClass();
+        }
+    }
+
     if (EventFunction)
     {
         EventNode = NewObject<UK2Node_Event>(Graph);
@@ -221,12 +234,13 @@ UK2Node_Event* FUnrealMCPCommonUtils::CreateEventNode(UEdGraph* Graph, const FSt
         Graph->AddNode(EventNode, true);
         EventNode->PostPlacedNewNode();
         EventNode->AllocateDefaultPins();
-        UE_LOG(LogTemp, Display, TEXT("Created new event node with name %s (ID: %s)"), 
+        UE_LOG(LogTemp, Display, TEXT("Created new event node with name %s (ID: %s)"),
             *EventName, *EventNode->NodeGuid.ToString());
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to find function for event name: %s"), *EventName);
+        UE_LOG(LogTemp, Error, TEXT("Failed to find function for event name: %s in class hierarchy for %s"),
+            *EventName, *Blueprint->GetName());
     }
     
     return EventNode;
