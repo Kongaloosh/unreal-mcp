@@ -773,4 +773,55 @@ def register_blueprint_node_tools(mcp: FastMCP):
         except Exception as e:
             return {"success": False, "message": f"Error adding create object node: {e}"}
 
+    @mcp.tool()
+    def add_blueprint_set_variable_on_object(
+        ctx: Context,
+        blueprint_name: str,
+        variable_name: str,
+        target_class: str,
+        node_position = None,
+        graph_name: str = None
+    ) -> Dict[str, Any]:
+        """
+        Add a Set Variable node that sets a property on an external object (not self).
+        Use this to set properties on objects returned from Construct Object nodes.
+
+        The node has: exec in/out, a Target pin (wire the object reference),
+        and a value pin (wire the value to set).
+
+        Args:
+            blueprint_name: Name of the Blueprint containing the graph
+            variable_name: Name of the property to set (e.g. SpeechText, OwningFunction)
+            target_class: Class that owns the property (e.g. BP_LabAction_Speak, LabAgentAction)
+            node_position: Optional [X, Y] position
+            graph_name: Optional graph name. Defaults to EventGraph.
+
+        Returns:
+            Response with node_id and pins list
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "variable_name": variable_name,
+                "target_class": target_class,
+                "node_position": node_position or [0, 0]
+            }
+            if graph_name:
+                params["graph_name"] = graph_name
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("add_blueprint_set_variable_on_object", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error adding set variable node: {e}"}
+
     logger.info("Blueprint node tools registered successfully")
