@@ -284,6 +284,7 @@ UK2Node_VariableGet* FUnrealMCPCommonUtils::CreateVariableGetNode(UEdGraph* Grap
         VariableGetNode->NodePosX = Position.X;
         VariableGetNode->NodePosY = Position.Y;
         Graph->AddNode(VariableGetNode, true);
+        VariableGetNode->CreateNewGuid();
         VariableGetNode->PostPlacedNewNode();
         VariableGetNode->AllocateDefaultPins();
         

@@ -427,4 +427,125 @@ def register_blueprint_node_tools(mcp: FastMCP):
             logger.error(error_msg)
             return {"success": False, "message": error_msg}
     
+    @mcp.tool()
+    def add_blueprint_variable_get_node(
+        ctx: Context,
+        blueprint_name: str,
+        variable_name: str,
+        node_position = None
+    ) -> Dict[str, Any]:
+        """
+        Add a variable Get node to a Blueprint's event graph.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            variable_name: Name of the variable to get
+            node_position: Optional [X, Y] position in the graph
+
+        Returns:
+            Response containing the node ID and success status
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "variable_name": variable_name,
+                "node_position": node_position or [0, 0]
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("add_blueprint_variable_get_node", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error adding variable get node: {e}"}
+
+    @mcp.tool()
+    def add_blueprint_branch_node(
+        ctx: Context,
+        blueprint_name: str,
+        node_position = None
+    ) -> Dict[str, Any]:
+        """
+        Add a Branch (if/then/else) node to a Blueprint's event graph.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            node_position: Optional [X, Y] position in the graph
+
+        Returns:
+            Response containing the node ID and success status.
+            Pins: 'execute' (exec in), 'Condition' (bool in), 'then' (true exec out), 'else' (false exec out)
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "node_position": node_position or [0, 0]
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("add_blueprint_branch_node", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error adding branch node: {e}"}
+
+    @mcp.tool()
+    def set_pin_default_value(
+        ctx: Context,
+        blueprint_name: str,
+        node_id: str,
+        pin_name: str,
+        default_value: str
+    ) -> Dict[str, Any]:
+        """
+        Set the default value of a pin on a Blueprint node.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            node_id: GUID of the target node
+            pin_name: Name of the pin to set
+            default_value: The default value string to set
+
+        Returns:
+            Response indicating success or failure
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "node_id": node_id,
+                "pin_name": pin_name,
+                "default_value": default_value
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("set_pin_default_value", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error setting pin default value: {e}"}
+
     logger.info("Blueprint node tools registered successfully")
