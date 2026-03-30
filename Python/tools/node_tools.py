@@ -548,4 +548,128 @@ def register_blueprint_node_tools(mcp: FastMCP):
         except Exception as e:
             return {"success": False, "message": f"Error setting pin default value: {e}"}
 
+    @mcp.tool()
+    def add_blueprint_custom_event(
+        ctx: Context,
+        blueprint_name: str,
+        event_name: str,
+        node_position = None
+    ) -> Dict[str, Any]:
+        """
+        Add a custom event node to a Blueprint's event graph.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            event_name: Name for the custom event
+            node_position: Optional [X, Y] position in the graph
+
+        Returns:
+            Response containing the node ID and event name.
+            Pins: 'then' (exec out), 'OutputDelegate' (delegate out)
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "event_name": event_name,
+                "node_position": node_position or [0, 0]
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("add_blueprint_custom_event", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error adding custom event: {e}"}
+
+    @mcp.tool()
+    def remove_blueprint_node(
+        ctx: Context,
+        blueprint_name: str,
+        node_id: str
+    ) -> Dict[str, Any]:
+        """
+        Remove a node from a Blueprint's event graph. Breaks all connections first.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            node_id: GUID of the node to remove
+
+        Returns:
+            Response indicating success or failure
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "node_id": node_id
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("remove_blueprint_node", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error removing node: {e}"}
+
+    @mcp.tool()
+    def disconnect_blueprint_nodes(
+        ctx: Context,
+        blueprint_name: str,
+        source_node_id: str,
+        source_pin: str,
+        target_node_id: str,
+        target_pin: str
+    ) -> Dict[str, Any]:
+        """
+        Disconnect two nodes in a Blueprint's event graph.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            source_node_id: ID of the source node
+            source_pin: Name of the output pin on the source node
+            target_node_id: ID of the target node
+            target_pin: Name of the input pin on the target node
+
+        Returns:
+            Response indicating success or failure
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "source_node_id": source_node_id,
+                "source_pin": source_pin,
+                "target_node_id": target_node_id,
+                "target_pin": target_pin
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("disconnect_blueprint_nodes", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error disconnecting nodes: {e}"}
+
     logger.info("Blueprint node tools registered successfully")

@@ -11,6 +11,7 @@
 #include "K2Node_InputAction.h"
 #include "K2Node_Self.h"
 #include "K2Node_IfThenElse.h"
+#include "K2Node_CustomEvent.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "GameFramework/InputSettings.h"
@@ -70,6 +71,18 @@ TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleCommand(const FSt
     else if (CommandType == TEXT("set_pin_default_value"))
     {
         return HandleSetPinDefaultValue(Params);
+    }
+    else if (CommandType == TEXT("add_blueprint_custom_event"))
+    {
+        return HandleAddBlueprintCustomEvent(Params);
+    }
+    else if (CommandType == TEXT("remove_blueprint_node"))
+    {
+        return HandleRemoveBlueprintNode(Params);
+    }
+    else if (CommandType == TEXT("disconnect_blueprint_nodes"))
+    {
+        return HandleDisconnectBlueprintNodes(Params);
     }
 
     return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Unknown blueprint node command: %s"), *CommandType));
@@ -1112,4 +1125,188 @@ TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleSetPinDefaultValu
     }
 
     return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Node not found: %s"), *NodeId));
+}
+
+TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleAddBlueprintCustomEvent(const TSharedPtr<FJsonObject>& Params)
+{
+    FString BlueprintName;
+    if (!Params->TryGetStringField(TEXT("blueprint_name"), BlueprintName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'blueprint_name' parameter"));
+    }
+
+    FString EventName;
+    if (!Params->TryGetStringField(TEXT("event_name"), EventName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'event_name' parameter"));
+    }
+
+    UBlueprint* Blueprint = FUnrealMCPCommonUtils::FindBlueprint(BlueprintName);
+    if (!Blueprint)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Blueprint not found: %s"), *BlueprintName));
+    }
+
+    UEdGraph* EventGraph = FUnrealMCPCommonUtils::FindOrCreateEventGraph(Blueprint);
+    if (!EventGraph)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Failed to find or create event graph"));
+    }
+
+    FVector2D Position = FUnrealMCPCommonUtils::GetVector2DFromJson(Params, TEXT("node_position"));
+
+    UK2Node_CustomEvent* CustomEventNode = NewObject<UK2Node_CustomEvent>(EventGraph);
+    CustomEventNode->CustomFunctionName = FName(*EventName);
+    CustomEventNode->NodePosX = Position.X;
+    CustomEventNode->NodePosY = Position.Y;
+    EventGraph->AddNode(CustomEventNode, true);
+    CustomEventNode->CreateNewGuid();
+    CustomEventNode->PostPlacedNewNode();
+    CustomEventNode->AllocateDefaultPins();
+
+    FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+
+    TSharedPtr<FJsonObject> ResultObj = MakeShared<FJsonObject>();
+    ResultObj->SetStringField(TEXT("node_id"), CustomEventNode->NodeGuid.ToString());
+    ResultObj->SetStringField(TEXT("event_name"), EventName);
+    return ResultObj;
+}
+
+TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleRemoveBlueprintNode(const TSharedPtr<FJsonObject>& Params)
+{
+    FString BlueprintName;
+    if (!Params->TryGetStringField(TEXT("blueprint_name"), BlueprintName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'blueprint_name' parameter"));
+    }
+
+    FString NodeId;
+    if (!Params->TryGetStringField(TEXT("node_id"), NodeId))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'node_id' parameter"));
+    }
+
+    UBlueprint* Blueprint = FUnrealMCPCommonUtils::FindBlueprint(BlueprintName);
+    if (!Blueprint)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Blueprint not found: %s"), *BlueprintName));
+    }
+
+    UEdGraph* EventGraph = FUnrealMCPCommonUtils::FindOrCreateEventGraph(Blueprint);
+    if (!EventGraph)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Failed to find or create event graph"));
+    }
+
+    FGuid TargetGuid;
+    FGuid::Parse(NodeId, TargetGuid);
+
+    for (UEdGraphNode* Node : EventGraph->Nodes)
+    {
+        if (Node->NodeGuid == TargetGuid)
+        {
+            // Break all pin connections first
+            for (UEdGraphPin* Pin : Node->Pins)
+            {
+                Pin->BreakAllPinLinks();
+            }
+            EventGraph->RemoveNode(Node);
+            FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+
+            TSharedPtr<FJsonObject> ResultObj = MakeShared<FJsonObject>();
+            ResultObj->SetStringField(TEXT("node_id"), NodeId);
+            ResultObj->SetBoolField(TEXT("removed"), true);
+            return ResultObj;
+        }
+    }
+
+    return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Node not found: %s"), *NodeId));
+}
+
+TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleDisconnectBlueprintNodes(const TSharedPtr<FJsonObject>& Params)
+{
+    FString BlueprintName;
+    if (!Params->TryGetStringField(TEXT("blueprint_name"), BlueprintName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'blueprint_name' parameter"));
+    }
+
+    FString SourceNodeId;
+    if (!Params->TryGetStringField(TEXT("source_node_id"), SourceNodeId))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'source_node_id' parameter"));
+    }
+
+    FString SourcePinName;
+    if (!Params->TryGetStringField(TEXT("source_pin"), SourcePinName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'source_pin' parameter"));
+    }
+
+    FString TargetNodeId;
+    if (!Params->TryGetStringField(TEXT("target_node_id"), TargetNodeId))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'target_node_id' parameter"));
+    }
+
+    FString TargetPinName;
+    if (!Params->TryGetStringField(TEXT("target_pin"), TargetPinName))
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Missing 'target_pin' parameter"));
+    }
+
+    UBlueprint* Blueprint = FUnrealMCPCommonUtils::FindBlueprint(BlueprintName);
+    if (!Blueprint)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Blueprint not found: %s"), *BlueprintName));
+    }
+
+    UEdGraph* EventGraph = FUnrealMCPCommonUtils::FindOrCreateEventGraph(Blueprint);
+    if (!EventGraph)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(TEXT("Failed to find or create event graph"));
+    }
+
+    FGuid SourceGuid, TargetGuid;
+    FGuid::Parse(SourceNodeId, SourceGuid);
+    FGuid::Parse(TargetNodeId, TargetGuid);
+
+    UEdGraphNode* SourceNode = nullptr;
+    UEdGraphNode* TargetNode = nullptr;
+
+    for (UEdGraphNode* Node : EventGraph->Nodes)
+    {
+        if (Node->NodeGuid == SourceGuid) SourceNode = Node;
+        if (Node->NodeGuid == TargetGuid) TargetNode = Node;
+    }
+
+    if (!SourceNode)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Source node not found: %s"), *SourceNodeId));
+    }
+    if (!TargetNode)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Target node not found: %s"), *TargetNodeId));
+    }
+
+    UEdGraphPin* SourcePin = FUnrealMCPCommonUtils::FindPin(SourceNode, SourcePinName, EGPD_Output);
+    UEdGraphPin* TargetPin = FUnrealMCPCommonUtils::FindPin(TargetNode, TargetPinName, EGPD_Input);
+
+    if (!SourcePin)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Source pin not found: %s"), *SourcePinName));
+    }
+    if (!TargetPin)
+    {
+        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Target pin not found: %s"), *TargetPinName));
+    }
+
+    SourcePin->BreakLinkTo(TargetPin);
+    FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+
+    TSharedPtr<FJsonObject> ResultObj = MakeShared<FJsonObject>();
+    ResultObj->SetStringField(TEXT("source_node_id"), SourceNodeId);
+    ResultObj->SetStringField(TEXT("target_node_id"), TargetNodeId);
+    ResultObj->SetBoolField(TEXT("disconnected"), true);
+    return ResultObj;
 }
