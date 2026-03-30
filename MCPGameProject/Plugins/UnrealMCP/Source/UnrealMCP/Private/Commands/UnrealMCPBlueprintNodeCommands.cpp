@@ -13,6 +13,7 @@
 #include "K2Node_IfThenElse.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_GenericCreateObject.h"
+#include "K2Node_VariableSet.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "GameFramework/InputSettings.h"
