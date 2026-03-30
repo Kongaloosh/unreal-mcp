@@ -371,6 +371,29 @@ bool FUnrealMCPCommonUtils::ConnectGraphNodes(UEdGraph* Graph, UEdGraphNode* Sou
     
     if (SourcePin && TargetPin)
     {
+        const UEdGraphSchema* Schema = Graph->GetSchema();
+        if (Schema)
+        {
+            FPinConnectionResponse Response = Schema->CanCreateConnection(SourcePin, TargetPin);
+            if (Response.Response == CONNECT_RESPONSE_MAKE)
+            {
+                Schema->TryCreateConnection(SourcePin, TargetPin);
+                return true;
+            }
+            else if (Response.Response == CONNECT_RESPONSE_BREAK_OTHERS_A || Response.Response == CONNECT_RESPONSE_BREAK_OTHERS_B ||
+                     Response.Response == CONNECT_RESPONSE_BREAK_OTHERS_AB)
+            {
+                Schema->TryCreateConnection(SourcePin, TargetPin);
+                return true;
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("Can't connect pins '%s' and '%s': %s"),
+                    *SourcePin->PinName.ToString(), *TargetPin->PinName.ToString(), *Response.Message.ToString());
+                return false;
+            }
+        }
+        // Fallback if no schema
         SourcePin->MakeLinkTo(TargetPin);
         return true;
     }

@@ -834,9 +834,52 @@ TSharedPtr<FJsonObject> FUnrealMCPBlueprintCommands::HandleCompileBlueprint(cons
     // Compile the blueprint
     FKismetEditorUtilities::CompileBlueprint(Blueprint);
 
+    // Check compilation status
+    bool bHasErrors = Blueprint->Status == BS_Error;
     TSharedPtr<FJsonObject> ResultObj = MakeShared<FJsonObject>();
     ResultObj->SetStringField(TEXT("name"), BlueprintName);
-    ResultObj->SetBoolField(TEXT("compiled"), true);
+    ResultObj->SetBoolField(TEXT("compiled"), !bHasErrors);
+
+    if (bHasErrors)
+    {
+        // Collect error messages from the message log
+        TArray<TSharedPtr<FJsonValue>> ErrorArray;
+        for (const TSharedPtr<SWidget>& Widget : TArray<TSharedPtr<SWidget>>())
+        {
+            // Not easily accessible; use CompilerResultsLog instead
+        }
+
+        // Use the Blueprint's compiler results
+        FString ErrorMessages;
+        for (UEdGraph* Graph : Blueprint->UbergraphPages)
+        {
+            for (UEdGraphNode* Node : Graph->Nodes)
+            {
+                if (Node->bHasCompilerMessage && Node->ErrorType <= EMessageSeverity::Error)
+                {
+                    ErrorMessages += Node->ErrorMsg + TEXT("\n");
+                }
+            }
+        }
+        for (UEdGraph* Graph : Blueprint->FunctionGraphs)
+        {
+            for (UEdGraphNode* Node : Graph->Nodes)
+            {
+                if (Node->bHasCompilerMessage && Node->ErrorType <= EMessageSeverity::Error)
+                {
+                    ErrorMessages += Node->ErrorMsg + TEXT("\n");
+                }
+            }
+        }
+
+        if (!ErrorMessages.IsEmpty())
+        {
+            ResultObj->SetStringField(TEXT("errors"), ErrorMessages);
+        }
+        return FUnrealMCPCommonUtils::CreateErrorResponse(
+            FString::Printf(TEXT("Blueprint compilation failed: %s"), *ErrorMessages));
+    }
+
     return ResultObj;
 }
 
