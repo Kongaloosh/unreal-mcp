@@ -126,30 +126,32 @@ def register_blueprint_node_tools(mcp: FastMCP):
         target: str,
         function_name: str,
         params = None,
-        node_position = None
+        node_position = None,
+        graph_name: str = None
     ) -> Dict[str, Any]:
         """
-        Add a function call node to a Blueprint's event graph.
-        
+        Add a function call node to a Blueprint graph.
+
         Args:
             blueprint_name: Name of the target Blueprint
             target: Target object for the function (component name or self)
             function_name: Name of the function to call
             params: Optional parameters to set on the function node
             node_position: Optional [X, Y] position in the graph
-            
+            graph_name: Optional graph name to target. Defaults to EventGraph.
+
         Returns:
             Response containing the node ID and success status
         """
         from unreal_mcp_server import get_unreal_connection
-        
+
         try:
             # Handle default values within the method body
             if params is None:
                 params = {}
             if node_position is None:
                 node_position = [0, 0]
-            
+
             command_params = {
                 "blueprint_name": blueprint_name,
                 "target": target,
@@ -157,6 +159,8 @@ def register_blueprint_node_tools(mcp: FastMCP):
                 "params": params,
                 "node_position": node_position
             }
+            if graph_name:
+                command_params["graph_name"] = graph_name
             
             unreal = get_unreal_connection()
             if not unreal:
@@ -185,23 +189,25 @@ def register_blueprint_node_tools(mcp: FastMCP):
         source_node_id: str,
         source_pin: str,
         target_node_id: str,
-        target_pin: str
+        target_pin: str,
+        graph_name: str = None
     ) -> Dict[str, Any]:
         """
-        Connect two nodes in a Blueprint's event graph.
-        
+        Connect two nodes in a Blueprint graph.
+
         Args:
             blueprint_name: Name of the target Blueprint
             source_node_id: ID of the source node
             source_pin: Name of the output pin on the source node
             target_node_id: ID of the target node
             target_pin: Name of the input pin on the target node
-            
+            graph_name: Optional graph name to target. Defaults to EventGraph.
+
         Returns:
             Response indicating success or failure
         """
         from unreal_mcp_server import get_unreal_connection
-        
+
         try:
             params = {
                 "blueprint_name": blueprint_name,
@@ -210,6 +216,8 @@ def register_blueprint_node_tools(mcp: FastMCP):
                 "target_node_id": target_node_id,
                 "target_pin": target_pin
             }
+            if graph_name:
+                params["graph_name"] = graph_name
             
             unreal = get_unreal_connection()
             if not unreal:
@@ -432,15 +440,17 @@ def register_blueprint_node_tools(mcp: FastMCP):
         ctx: Context,
         blueprint_name: str,
         variable_name: str,
-        node_position = None
+        node_position = None,
+        graph_name: str = None
     ) -> Dict[str, Any]:
         """
-        Add a variable Get node to a Blueprint's event graph.
+        Add a variable Get node to a Blueprint graph.
 
         Args:
             blueprint_name: Name of the target Blueprint
             variable_name: Name of the variable to get
             node_position: Optional [X, Y] position in the graph
+            graph_name: Optional graph name to target (e.g. function override name). Defaults to EventGraph.
 
         Returns:
             Response containing the node ID and success status
@@ -453,6 +463,8 @@ def register_blueprint_node_tools(mcp: FastMCP):
                 "variable_name": variable_name,
                 "node_position": node_position or [0, 0]
             }
+            if graph_name:
+                params["graph_name"] = graph_name
 
             unreal = get_unreal_connection()
             if not unreal:
@@ -671,5 +683,47 @@ def register_blueprint_node_tools(mcp: FastMCP):
 
         except Exception as e:
             return {"success": False, "message": f"Error disconnecting nodes: {e}"}
+
+    @mcp.tool()
+    def override_blueprint_function(
+        ctx: Context,
+        blueprint_name: str,
+        function_name: str
+    ) -> Dict[str, Any]:
+        """
+        Create a function override in a Blueprint. Returns the graph name and node info
+        (entry node, return node with pins) so you can add nodes and wire within the function graph.
+
+        Use the returned graph_name as the graph_name parameter in other node commands
+        (add_blueprint_variable_get_node, add_blueprint_function_node, connect_blueprint_nodes, etc.)
+        to add and wire nodes within this function graph instead of the EventGraph.
+
+        Args:
+            blueprint_name: Name of the target Blueprint
+            function_name: Name of the function to override (e.g. GetStatusMessage, GetStartedMessage)
+
+        Returns:
+            Response with graph_name, nodes list (with IDs and pins), and whether it already existed
+        """
+        from unreal_mcp_server import get_unreal_connection
+
+        try:
+            params = {
+                "blueprint_name": blueprint_name,
+                "function_name": function_name
+            }
+
+            unreal = get_unreal_connection()
+            if not unreal:
+                return {"success": False, "message": "Failed to connect to Unreal Engine"}
+
+            response = unreal.send_command("override_blueprint_function", params)
+            if not response:
+                return {"success": False, "message": "No response from Unreal Engine"}
+
+            return response
+
+        except Exception as e:
+            return {"success": False, "message": f"Error overriding function: {e}"}
 
     logger.info("Blueprint node tools registered successfully")

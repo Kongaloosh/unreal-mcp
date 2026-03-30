@@ -52,6 +52,7 @@ public:
                                 UEdGraphNode* TargetNode, const FString& TargetPinName);
     static UEdGraphPin* FindPin(UEdGraphNode* Node, const FString& PinName, EEdGraphPinDirection Direction = EGPD_MAX);
     static UK2Node_Event* FindExistingEventNode(UEdGraph* Graph, const FString& EventName);
+    static UEdGraph* FindGraphByName(UBlueprint* Blueprint, const FString& GraphName);
 
     // Property utilities
     static bool SetObjectProperty(UObject* Object, const FString& PropertyName, 

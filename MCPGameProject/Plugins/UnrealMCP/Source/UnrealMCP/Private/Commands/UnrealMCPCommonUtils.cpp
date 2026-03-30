@@ -179,6 +179,34 @@ UEdGraph* FUnrealMCPCommonUtils::FindOrCreateEventGraph(UBlueprint* Blueprint)
     return NewGraph;
 }
 
+UEdGraph* FUnrealMCPCommonUtils::FindGraphByName(UBlueprint* Blueprint, const FString& GraphName)
+{
+    if (!Blueprint)
+    {
+        return nullptr;
+    }
+
+    // Check UbergraphPages (EventGraph, etc.)
+    for (UEdGraph* Graph : Blueprint->UbergraphPages)
+    {
+        if (Graph->GetName() == GraphName || Graph->GetName().Contains(GraphName))
+        {
+            return Graph;
+        }
+    }
+
+    // Check FunctionGraphs (overrides like GetStatusMessage, GetStartedMessage, etc.)
+    for (UEdGraph* Graph : Blueprint->FunctionGraphs)
+    {
+        if (Graph->GetName() == GraphName || Graph->GetName().Contains(GraphName))
+        {
+            return Graph;
+        }
+    }
+
+    return nullptr;
+}
+
 // Blueprint node utilities
 UK2Node_Event* FUnrealMCPCommonUtils::CreateEventNode(UEdGraph* Graph, const FString& EventName, const FVector2D& Position)
 {

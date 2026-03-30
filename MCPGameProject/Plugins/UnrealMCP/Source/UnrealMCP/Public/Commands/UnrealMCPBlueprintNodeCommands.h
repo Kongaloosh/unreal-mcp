@@ -30,4 +30,8 @@ private:
     TSharedPtr<FJsonObject> HandleAddBlueprintCustomEvent(const TSharedPtr<FJsonObject>& Params);
     TSharedPtr<FJsonObject> HandleRemoveBlueprintNode(const TSharedPtr<FJsonObject>& Params);
     TSharedPtr<FJsonObject> HandleDisconnectBlueprintNodes(const TSharedPtr<FJsonObject>& Params);
+    TSharedPtr<FJsonObject> HandleOverrideBlueprintFunction(const TSharedPtr<FJsonObject>& Params);
+
+    // Helper to resolve graph from optional graph_name param, defaults to EventGraph
+    UEdGraph* ResolveGraph(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Params);
 }; 
