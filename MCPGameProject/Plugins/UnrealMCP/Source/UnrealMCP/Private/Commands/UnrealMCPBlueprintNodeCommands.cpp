@@ -732,7 +732,41 @@ TSharedPtr<FJsonObject> FUnrealMCPBlueprintNodeCommands::HandleAddBlueprintVaria
     }
     else
     {
-        return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Unsupported variable type: %s"), *VariableType));
+        // Try to resolve as an Object Reference type — look up the class by name
+        UClass* FoundClass = nullptr;
+        TArray<FString> NamesToTry;
+        NamesToTry.Add(VariableType);
+        if (!VariableType.StartsWith(TEXT("U")) && !VariableType.StartsWith(TEXT("A")))
+        {
+            NamesToTry.Add(TEXT("U") + VariableType);
+            NamesToTry.Add(TEXT("A") + VariableType);
+        }
+        for (const FString& Name : NamesToTry)
+        {
+            FoundClass = FindObject<UClass>(ANY_PACKAGE, *Name);
+            if (FoundClass)
+            {
+                break;
+            }
+        }
+        // Also try loading as a Blueprint generated class
+        if (!FoundClass)
+        {
+            UBlueprint* TypeBP = FUnrealMCPCommonUtils::FindBlueprint(VariableType);
+            if (TypeBP && TypeBP->GeneratedClass)
+            {
+                FoundClass = TypeBP->GeneratedClass;
+            }
+        }
+        if (FoundClass)
+        {
+            PinType.PinCategory = UEdGraphSchema_K2::PC_Object;
+            PinType.PinSubCategoryObject = FoundClass;
+        }
+        else
+        {
+            return FUnrealMCPCommonUtils::CreateErrorResponse(FString::Printf(TEXT("Unsupported variable type: %s"), *VariableType));
+        }
     }
 
     // Create the variable
